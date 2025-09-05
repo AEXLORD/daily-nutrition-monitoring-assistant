@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import { MongoClient, ServerApiVersion } from 'mongodb';
 
 const MONGODB_URI = process.env.MONGODB_URI || '';
 
@@ -6,45 +6,47 @@ if (!MONGODB_URI) {
   throw new Error('Please define the MONGODB_URI environment variable');
 }
 
-interface MongooseCache {
-  conn: typeof mongoose | null;
-  promise: Promise<typeof mongoose> | null;
+interface MongoDBCache {
+  client: MongoClient | null;
+  promise: Promise<MongoClient> | null;
 }
 
 declare global {
-  var mongoose: MongooseCache | undefined;
+  var mongo: MongoDBCache | undefined;
 }
 
-const cached: MongooseCache = global.mongoose || {
-  conn: null,
+const cached: MongoDBCache = global.mongo || {
+  client: null,
   promise: null,
 };
 
-if (!global.mongoose) {
-  global.mongoose = cached;
+if (!global.mongo) {
+  global.mongo = cached;
 }
 
 async function connectDB() {
-  if (cached.conn) {
-    return cached.conn;
+  if (cached.client) {
+    return cached.client;
   }
 
   if (!cached.promise) {
-    const opts = {
-      bufferCommands: false,
-    };
-
-    cached.promise = mongoose.connect(MONGODB_URI, opts);
+    cached.promise = MongoClient.connect(MONGODB_URI, {
+      serverApi: {
+        version: ServerApiVersion.v1,
+        strict: true,
+        deprecationErrors: true,
+      }
+    });
   }
 
   try {
-    cached.conn = await cached.promise;
+    cached.client = await cached.promise;
   } catch (e) {
     cached.promise = null;
     throw e;
   }
 
-  return cached.conn;
+  return cached.client;
 }
 
 export default connectDB;

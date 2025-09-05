@@ -1,54 +1,49 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-// import { authenticateRequest } from '@/lib/auth';
+import { verifyToken } from '@/lib/auth';
+import { findUserById } from '@/lib/db/users';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-    
-    // 由于NextRequest和NextApiRequest不同，需要手动处理认证
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-    
+    const token = request.cookies.get('token')?.value;
+
     if (!token) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Not authenticated' },
         { status: 401 }
       );
     }
-    
-    const { verifyToken } = await import('@/lib/auth');
-    const payload = verifyToken(token);
-    
-    if (!payload) {
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
       );
     }
-    
-    const user = await User.findById(payload.userId).select('-password');
+
+    const user = await findUserById(decoded.userId);
     if (!user) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }
       );
     }
-    
+
     return NextResponse.json({
       user: {
         id: user._id,
         email: user.email,
-        username: user.username,
-        profile: user.profile,
-        preferences: user.preferences,
-        settings: user.settings,
-      },
+        name: user.name,
+        age: user.age,
+        gender: user.gender,
+        height: user.height,
+        weight: user.weight,
+        activityLevel: user.activityLevel,
+        goal: user.goal
+      }
     });
-    
-  } catch (error: any) {
-    console.error('Get user error:', error);
+  } catch (error) {
+    console.error('Auth me error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

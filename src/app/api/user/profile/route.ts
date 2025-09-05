@@ -1,46 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
+import { verifyToken } from '@/lib/auth';
+import { updateUser } from '@/lib/db/users';
 
 export async function GET(request: NextRequest) {
   try {
-    await connectDB();
-    
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-    
+    const token = request.cookies.get('token')?.value;
+
     if (!token) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Not authenticated' },
         { status: 401 }
       );
     }
-    
-    const { verifyToken } = await import('@/lib/auth');
-    const payload = verifyToken(token);
-    
-    if (!payload) {
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
       );
     }
-    
-    const user = await User.findById(payload.userId).select('-password');
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      );
-    }
-    
-    return NextResponse.json({
-      profile: user.profile,
-      preferences: user.preferences,
-      settings: user.settings,
-    });
-    
-  } catch (error: any) {
+
+    return NextResponse.json({ userId: decoded.userId });
+  } catch (error) {
     console.error('Get profile error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -51,51 +33,43 @@ export async function GET(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    await connectDB();
-    
-    const authHeader = request.headers.get('authorization');
-    const token = authHeader?.startsWith('Bearer ') ? authHeader.substring(7) : null;
-    
+    const token = request.cookies.get('token')?.value;
+
     if (!token) {
       return NextResponse.json(
-        { error: 'Authentication required' },
+        { error: 'Not authenticated' },
         { status: 401 }
       );
     }
-    
-    const { verifyToken } = await import('@/lib/auth');
-    const payload = verifyToken(token);
-    
-    if (!payload) {
+
+    const decoded = verifyToken(token);
+    if (!decoded) {
       return NextResponse.json(
         { error: 'Invalid token' },
         { status: 401 }
       );
     }
-    
-    const updateData = await request.json();
-    
-    const user = await User.findByIdAndUpdate(
-      payload.userId,
-      { $set: updateData },
-      { new: true, runValidators: true }
-    ).select('-password');
-    
-    if (!user) {
+
+    const { age, gender, height, weight, activityLevel, goal } = await request.json();
+
+    const updated = await updateUser(decoded.userId, {
+      age,
+      gender,
+      height,
+      weight,
+      activityLevel,
+      goal
+    });
+
+    if (!updated) {
       return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
+        { error: 'Failed to update profile' },
+        { status: 400 }
       );
     }
-    
-    return NextResponse.json({
-      message: 'Profile updated successfully',
-      profile: user.profile,
-      preferences: user.preferences,
-      settings: user.settings,
-    });
-    
-  } catch (error: any) {
+
+    return NextResponse.json({ message: 'Profile updated successfully' });
+  } catch (error) {
     console.error('Update profile error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },

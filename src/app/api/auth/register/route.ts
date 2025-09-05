@@ -1,56 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import connectDB from '@/lib/mongodb';
-import User from '@/models/User';
-import { generateToken, setAuthCookie } from '@/lib/auth';
+import { createUser, findUserByEmail } from '@/lib/db/users';
 
 export async function POST(request: NextRequest) {
   try {
-    await connectDB();
-    
-    const { email, password, username } = await request.json();
-    
-    if (!email || !password || !username) {
+    const { email, password, name } = await request.json();
+
+    if (!email || !password || !name) {
       return NextResponse.json(
-        { error: 'Email, password, and username are required' },
+        { error: 'Email, password, and name are required' },
         { status: 400 }
       );
     }
-    
-    const existingUser = await User.findOne({ email });
+
+    const existingUser = await findUserByEmail(email);
     if (existingUser) {
       return NextResponse.json(
         { error: 'User already exists' },
         { status: 409 }
       );
     }
-    
-    const user = new User({
-      email,
-      password,
-      username,
-    });
-    
-    await user.save();
-    
-    const token = generateToken({
-      userId: user._id.toString(),
-      email: user.email,
-    });
-    
-    const response = NextResponse.json({
-      message: 'User created successfully',
-      user: {
-        id: user._id,
-        email: user.email,
-        username: user.username,
-      },
-    });
-    
-    setAuthCookie(response, token);
-    
-    return response;
-    
-  } catch (error: any) {
+
+    const userId = await createUser({ email, password, name });
+
+    return NextResponse.json(
+      { message: 'User created successfully', userId },
+      { status: 201 }
+    );
+  } catch (error) {
     console.error('Registration error:', error);
     return NextResponse.json(
       { error: 'Internal server error' },
