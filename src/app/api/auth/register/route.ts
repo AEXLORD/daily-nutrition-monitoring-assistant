@@ -3,9 +3,12 @@ import { createUser, findUserByEmail } from '@/lib/db/users';
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name } = await request.json();
+    const { email, password, username, name } = await request.json();
+    
+    // 支持 username 或 name 字段
+    const userName = name || username;
 
-    if (!email || !password || !name) {
+    if (!email || !password || !userName) {
       return NextResponse.json(
         { error: 'Email, password, and name are required' },
         { status: 400 }
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const userId = await createUser({ email, password, name });
+    const userId = await createUser({ email, password, name: userName });
 
     return NextResponse.json(
       { message: 'User created successfully', userId },
